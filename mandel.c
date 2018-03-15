@@ -1,3 +1,6 @@
+/*segfault happens sometimes.
+ *
+ */
 
 #include "bitmap.h"
 
@@ -10,6 +13,7 @@
 #include <pthread.h>
 
 struct Parameters{
+	int num_threads; 
 	int xmin; 
 	int xmax; 
 	int ymin; 
@@ -19,11 +23,25 @@ struct Parameters{
 
 int iteration_to_color( int i, int max );
 int iterations_at_point( double x, double y, int max );
-void compute_image( struct bitmap *bm, struct Parameters params[], int num_threads );
-int get_num_lines(int image_height, int n); 
-struct Parameters* make_struct_array(struct Parameters* my_struct_ptr, int num_threads, 
-			int image_width, int image_height, float scale, int num_lines);
+//void compute_image( struct Parameters params[] );
+void *compute_image( void *paramsarg ); 
+int get_num_lines( int image_height, int n ); 
+struct Parameters* make_struct_array( struct Parameters* my_struct_ptr, int num_threads, 
+			int image_width, int image_height, float scale, int num_lines );
 
+struct Parameters my_struct[1000];
+struct Parameters* my_struct_ptr = my_struct;  
+struct bitmap *bm; 
+
+float xcenter; 
+float ycenter;
+float scale; 
+int image_width; 
+int image_height;  
+int max; 
+int num_threads; 
+
+	
 void show_help()
 {
 	printf("Use: mandel [options]\n");
@@ -44,23 +62,22 @@ void show_help()
 }
 
 int main( int argc, char *argv[] )
-{
+{	
+
 	char c;
 
 	// These are the default configuration values used
 	// if no command line arguments are given.
 
 	
-	struct Parameters my_struct[1000];
-	struct Parameters* my_struct_ptr = my_struct;  
 	const char *outfile = "mandel.bmp";
-	double xcenter = 0;
-	double ycenter = 0;
-	double scale = 4;
-	int    image_width = 500;
-	int    image_height = 500;
-	int    max = 1000;
-	int    num_threads = 1; 
+	xcenter = 0;
+	ycenter = 0;
+	scale = 4;
+	image_width = 500;
+	image_height = 500;
+	max = 1000;
+	num_threads = 1; 
 
 	// For each command line argument given,
 	// override the appropriate configuration value.
@@ -101,30 +118,42 @@ int main( int argc, char *argv[] )
 	
 	
 	int num_lines = get_num_lines(image_height, num_threads); 
+
+	pthread_t tid[num_threads]; 
+
 	my_struct_ptr = make_struct_array(my_struct_ptr, num_threads, image_width, image_height, scale, num_lines);   	
 	
-	int i = 0; 
-	while (i < num_threads)
-	{
-		printf("index %d: xmin %d, xmax %d, ymin %d, ymax %d, scale %f\n"
-			,i, my_struct[i].xmin, my_struct[i].xmax, my_struct[i].ymin, 
-			my_struct[i].ymax, my_struct[i].scale); 
-	i++; 
-	}	
+//	int i = 0; 
+//	while (i < num_threads)
+//	{
+//		printf("index %d: xmin %d, xmax %d, ymin %d, ymax %d, scale %f\n"
+//			,i, my_struct[i].xmin, my_struct[i].xmax, my_struct[i].ymin, 
+//			my_struct[i].ymax, my_struct[i].scale); 
+//	i++; 
+//	}	
 
 	// Display the configuration of the image.
 	printf("mandel: x=%lf y=%lf scale=%lf max=%d threads=%d, outfile=%s\n"
 		,xcenter,ycenter,scale,max,num_threads,outfile);
 
 	// Create a bitmap of the appropriate size.
-	struct bitmap *bm = bitmap_create(image_width,image_height);
+	bm = bitmap_create(image_width,image_height);
 
 	// Fill it with a dark blue, for debugging
 	bitmap_reset(bm,MAKE_RGBA(0,0,255,0));
 
 
 	// Compute the Mandelbrot image
-	compute_image(bm, my_struct_ptr, num_threads);
+	int i; 
+	for( i = 0; i < num_threads; i++ ){
+		if(pthread_create( &tid[i], NULL, compute_image(&my_struct[i]), NULL ))
+		{
+			perror("Error creating thread: "); 
+			exit( EXIT_FAILURE );  
+		}
+	}
+
+//	compute_image(&my_struct[0]); 
 
 	// Save the image in the stated file.
 	if(!bitmap_save(bm,outfile)) {
@@ -149,6 +178,7 @@ struct Parameters* make_struct_array(struct Parameters* my_struct_ptr, int num_t
 	my_struct_ptr[0].ymin = 0; 
 	my_struct_ptr[0].ymax = num_lines; 
 	my_struct_ptr[0].scale = scale; 
+	my_struct_ptr[0].num_threads = num_threads; 
 
 	int i = 1; 
 	while (i < num_threads)
@@ -158,6 +188,7 @@ struct Parameters* make_struct_array(struct Parameters* my_struct_ptr, int num_t
 		my_struct_ptr[i].ymin = my_struct_ptr[i-1].ymax + 1; 
 		my_struct_ptr[i].ymax = my_struct_ptr[i].ymin + num_lines; 
 		my_struct_ptr[i].scale = scale; 
+		my_struct_ptr[i].num_threads = num_threads; 
 		i++; 
 	}
 	return my_struct_ptr; 
@@ -168,18 +199,69 @@ Compute an entire Mandelbrot image, writing each point to the given bitmap.
 Scale the image to the range (xmin-xmax,ymin-ymax), limiting iterations to "max"
 */
 
-void compute_image( struct bitmap *bm, struct Parameters params[], int num_threads )
+
+void *compute_image( void *paramsarg )
+{
+	struct Parameters *this_struct; 
+	this_struct = (struct Parameters *) paramsarg; 	
+
+	int i,j; 
+	
+	int width = bitmap_width(bm);
+	int height = bitmap_height(bm);
+
+	double xmin = xcenter - scale; 
+	double xmax = xcenter + scale; 
+	double ymin = ycenter - scale; 
+	double ymax = ycenter + scale; 
+
+	// For every pixel in the image...
+	
+
+	for(j = this_struct->ymin; j < this_struct->ymax; j++) {
+		for(i = this_struct->xmin; i < this_struct->xmax; i++) {
+			// Determine the point in x,y space for that pixel.
+			double x = xmin + i*(xmax-xmin)/width;
+			double y = ymin + j*(ymax-ymin)/height;
+
+			// Compute the iterations at that point.
+			int iters = iterations_at_point(x,y,max);
+
+			// Set the pixel in the bitmap.
+			bitmap_set(bm,i,j,iters);
+		}
+	}
+	return paramsarg; 
+}
+
+
+/*
+void compute_image( struct Parameters params[] )
 {
 	int i,j;
 
 	int width = bitmap_width(bm);
 	int height = bitmap_height(bm);
 
-	double xmin = -4; 
-	double xmax = 4; 
-	double ymin = -4; 
-	double ymax = 4; 
-	int max = 1000; 
+	double xmin = xcenter - scale; 
+	double xmax = xcenter + scale; 
+	double ymin = ycenter - scale; 
+	double ymax = ycenter + scale; 
+
+//	int num_threads = params[0].num_threads; 
+	
+//	float scale = params[0].scale; 
+//	double xmin = params[0].xcenter - scale; 
+//	double xmax = params[0].xcenter + scale; 
+//	double ymin = params[0].ycenter - scale; 
+//	double ymax = params[0].ycenter + scale; 
+//	int max = params[0].max; 
+
+//	double xmin = -4; 
+//	double xmax = 4; 
+//	double ymin = -4; 
+//	double ymax = 4; 
+//	int max = 1000; 
 
 	int idx = 0; 
 	// For every pixel in the image...
@@ -203,7 +285,7 @@ void compute_image( struct bitmap *bm, struct Parameters params[], int num_threa
 		idx++; 
 	}
 }
-
+*/
 /*
 Return the number of iterations at point x, y
 in the Mandelbrot space, up to a maximum of max.
