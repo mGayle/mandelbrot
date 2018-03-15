@@ -21,7 +21,8 @@ int iteration_to_color( int i, int max );
 int iterations_at_point( double x, double y, int max );
 void compute_image( struct bitmap *bm, struct Parameters params[], int num_threads );
 int get_num_lines(int image_height, int n); 
-struct Parameters* make_struct_array(struct Parameters* my_struct_ptr, int num_threads, int image_width, int image_height, float scale, int num_lines);
+struct Parameters* make_struct_array(struct Parameters* my_struct_ptr, int num_threads, 
+			int image_width, int image_height, float scale, int num_lines);
 
 void show_help()
 {
