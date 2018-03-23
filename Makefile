@@ -2,7 +2,7 @@
 all: mandel series master_mandel
 
 mandel: mandel.o bitmap.o
-	gcc mandel.o bitmap.o -o mandel -lpthread
+	gcc mandel.o bitmap.o -o mandel -lpthread -v -da -Q
 
 series: series.o bitmap.o
 	gcc series.o bitmap.o -o series -lpthread

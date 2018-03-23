@@ -1,4 +1,6 @@
-/*Fixed segfault. seems to run well. :) 
+
+
+/*segfault happens sometimes.
  *
  */
 
@@ -23,6 +25,7 @@ struct Parameters{
 
 int iteration_to_color( int i, int max );
 int iterations_at_point( double x, double y, int max );
+//void compute_image( struct Parameters params[] );
 void *compute_image( void *paramsarg ); 
 int get_num_lines( int image_height, int n ); 
 struct Parameters* make_struct_array( struct Parameters* my_struct_ptr, int num_threads, 
@@ -39,9 +42,14 @@ int image_width;
 int image_height;  
 int max; 
 int num_threads; 
-const char *outfile;
 
+void *do_nothing(void *ptr); 
 	
+void *do_nothing(void *ptr)
+{
+	sleep(5); 
+	return NULL; 
+}
 
 void show_help()
 {
@@ -55,7 +63,7 @@ void show_help()
 	printf("-H <pixels> Height of the image in pixels. (default=500)\n");
 	printf("-n 	    Number of threads. (default=1)\n"); 
 	printf("-o <file>   Set output file. (default=mandel.bmp)\n");
-
+	printf("-h          Show this help text.\n");
 	printf("\nSome examples are:\n");
 	printf("mandel -x -0.5 -y -0.5 -s 0.2\n");
 	printf("mandel -x -.38 -y -.665 -s .05 -m 100\n");
@@ -71,7 +79,7 @@ int main( int argc, char *argv[] )
 	// if no command line arguments are given.
 
 	
-	outfile = "mandel.bmp";
+	const char *outfile = "mandel.bmp";
 	xcenter = 0;
 	ycenter = 0;
 	scale = 4;
@@ -116,6 +124,17 @@ int main( int argc, char *argv[] )
 		}
 	}
 
+/*	pthread_t do_nothing_thread; 
+	if(pthread_create(&do_nothing_thread, NULL, do_nothing, NULL))
+	{
+		perror("Error creating thread: "); 
+		exit( EXIT_FAILURE ); 
+	}
+	if(pthread_join(do_nothing_thread, NULL))
+	{
+		perror("Problem with pthread_join: "); 
+	}	
+*/	
 	int num_lines = get_num_lines(image_height, num_threads); 
 
 	pthread_t tid[1000] = {0};  
@@ -143,26 +162,34 @@ int main( int argc, char *argv[] )
 
 	// Compute the Mandelbrot image
 	int m; 
+
 	for( m = 0; m < num_threads; m++ )
 	{
-		if(pthread_create( &tid[m], NULL, compute_image,&my_struct[m]))
+	//	pthread_t tid[m];
+		printf("\n\nPRE-COMPUTE\n\n"); 
+		printf("m: %d\n", m); 
+		if(pthread_create( &tid[m], NULL, compute_image(&my_struct[m]), NULL ))
 		{
 			perror("Error creating thread: "); 
 			exit( EXIT_FAILURE );  
 		}
-		if(pthread_join( tid[m], NULL))
-		{
-			perror("Problem with pthread_join: "); 
-		}
+//		if(pthread_join( &tid[m], NULL))
+//		{
+//			perror("Problem with pthread_join: "); 
+//		}
 	}
 
 
+//	compute_image(&my_struct[0]); 
+//	compute_image(&my_struct[1]);
+	printf("POST-COMPUTE\n"); 
 	// Save the image in the stated file.
-	if(!bitmap_save(bm,outfile)) {
+	bitmap_save(bm, outfile); 
+/*	if(!bitmap_save(bm,outfile)) {
 		fprintf(stderr,"mandel: couldn't write to %s: %s\n",outfile,strerror(errno));
 		return 1;
 	}
-
+*/
 	return 0;
 }
 
