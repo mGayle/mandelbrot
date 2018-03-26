@@ -11,6 +11,8 @@
 #include <errno.h>
 #include <string.h>
 #include <pthread.h>
+#include <sys/time.h>
+
 
 struct Parameters{
 	int num_threads; 
@@ -64,13 +66,18 @@ void show_help()
 
 int main( int argc, char *argv[] )
 {	
-
+	//DON'T FORGET TO DELETE THIS WHEN YOU'RE READY TO TURN IT IN!!!!!!!
+	FILE *f = fopen("mandel_vals.txt", "a"); 
+	if (f == NULL)
+	{
+		printf("Error opening file!\n"); 
+		exit(1); 
+	}
 	char c;
 
 	// These are the default configuration values used
 	// if no command line arguments are given.
 
-	
 	outfile = "mandel.bmp";
 	xcenter = 0;
 	ycenter = 0;
@@ -120,16 +127,13 @@ int main( int argc, char *argv[] )
 
 	pthread_t tid[1000] = {0};  
 
-	my_struct_ptr = make_struct_array(my_struct_ptr, num_threads, image_width, image_height, scale, num_lines);   	
-	
-//	int i = 0; 
-//	while (i < num_threads)
-//	{
-//		printf("index %d: xmin %d, xmax %d, ymin %d, ymax %d, scale %f\n"
-//			,i, my_struct[i].xmin, my_struct[i].xmax, my_struct[i].ymin, 
-//			my_struct[i].ymax, my_struct[i].scale); 
-//	i++; 
-//	}	
+	my_struct_ptr = make_struct_array(my_struct_ptr, num_threads, image_width, 
+						image_height, scale, num_lines);   	
+	struct timeval begin; 
+	struct timeval end; 
+	long int time_diff; 
+
+		
 
 	// Display the configuration of the image.
 	printf("mandel: x=%lf y=%lf scale=%lf max=%d threads=%d, outfile=%s\n"
@@ -140,7 +144,8 @@ int main( int argc, char *argv[] )
 
 	// Fill it with a dark blue, for debugging
 	bitmap_reset(bm,MAKE_RGBA(0,0,255,0));
-
+			
+	gettimeofday( &begin, NULL ); 
 	// Compute the Mandelbrot image
 	int m; 
 	for( m = 0; m < num_threads; m++ )
@@ -156,7 +161,15 @@ int main( int argc, char *argv[] )
 		}
 	}
 
-
+	gettimeofday( &end, NULL ); 
+//	printf("\nBegin: %ld   End: %ld\n", (begin.tv_sec * 1000000 + begin.tv_usec),
+//                                          (end.tv_sec * 1000000 + end.tv_usec)); 
+	time_diff = ( end.tv_sec * 1000000 + end.tv_usec ) - ( begin.tv_sec * 1000000 + begin.tv_usec );
+	printf("\nTime difference: %ld\n", time_diff); 	
+	fprintf(f, "-x %f -y %f -s %f -W %d -H %d -m %d -n %d\n%ld\n\n", xcenter, ycenter, scale, 
+						image_width, image_height, max, num_threads, time_diff); 
+	fclose(f); 	
+		
 	// Save the image in the stated file.
 	if(!bitmap_save(bm,outfile)) {
 		fprintf(stderr,"mandel: couldn't write to %s: %s\n",outfile,strerror(errno));
@@ -182,6 +195,9 @@ struct Parameters* make_struct_array(struct Parameters* my_struct_ptr, int num_t
 	my_struct_ptr[0].scale = scale; 
 	my_struct_ptr[0].num_threads = num_threads; 
 
+	int remainder_lines; 
+	remainder_lines = 500 % num_lines; 
+	printf("REMAINDER LINES: %d\n", remainder_lines); 
 	int i = 1; 
 	while (i < num_threads)
 	{
@@ -189,14 +205,16 @@ struct Parameters* make_struct_array(struct Parameters* my_struct_ptr, int num_t
 		my_struct_ptr[i].xmax = image_width; 
 		my_struct_ptr[i].ymin = my_struct_ptr[i-1].ymax; 
 		my_struct_ptr[i].ymax = my_struct_ptr[i].ymin + num_lines;
-		printf("in make struct function: struct[%d] y min: %d\n",i, my_struct_ptr[i].ymin);
-  
-		printf("in make struct function: struct[%d] y max: %d\n",i, my_struct_ptr[i].ymax);  
 		my_struct_ptr[i].scale = scale; 
 		my_struct_ptr[i].scale = scale; 
 		my_struct_ptr[i].num_threads = num_threads; 
+		printf("in make struct function: struct[%d] y min: %d\n",i, my_struct_ptr[i].ymin);
+		printf("in make struct function: struct[%d] y max: %d\n",i, my_struct_ptr[i].ymax);  
 		i++; 
 	}
+	my_struct_ptr[i-1].ymax = my_struct_ptr[i-1].ymax + remainder_lines; 
+	printf("in make struct function: struct[%d] y min: %d\n",i-1, my_struct_ptr[i-1].ymin);
+	printf("in make struct function: struct[%d] y max: %d\n",i-1, my_struct_ptr[i-1].ymax);  
 	return my_struct_ptr; 
 }
 
